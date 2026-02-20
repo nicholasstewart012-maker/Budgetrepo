@@ -22,6 +22,7 @@ import {
 import { IConferenceRequest } from '../../../../models/IConferenceRequest';
 import { useAppContext } from '../../../../context/AppContext';
 import { StatusBadge } from '../Shared/StatusBadge';
+import { RequestDetailsModal } from '../Shared/RequestDetailsModal';
 
 const useStyles = makeStyles({
     root: {
@@ -44,6 +45,12 @@ const useStyles = makeStyles({
         display: 'flex',
         flexDirection: 'column',
         gap: '16px'
+    },
+    row: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        width: '100%'
     }
 });
 
@@ -54,13 +61,16 @@ export const AccountingInterface: React.FC = () => {
     const [requests, setRequests] = useState<IConferenceRequest[]>([]);
     const [loading, setLoading] = useState(false);
 
-    const [selectedRequest, setSelectedRequest] = useState<IConferenceRequest | null>(null);
+    const [selectedRequest, setSelectedRequest] = useState<IConferenceRequest | undefined>(undefined);
 
     const [denialReason, setDenialReason] = useState('');
     const [isDenialDialogOpen, setIsDenialDialogOpen] = useState(false);
 
     const [glCode, setGlCode] = useState('');
     const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
+
+    // View Details State
+    const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
 
     const loadRequests = async () => {
         setLoading(true);
@@ -144,7 +154,19 @@ export const AccountingInterface: React.FC = () => {
                                 <StatusBadge status={req.Status} />
                             </div>
                         }
-                        description={<Text>Submitted by: {req.SubmitterName} | Org Dev Approver: {req.OrgDevApproverEmail}</Text>}
+                        description={
+                            <>
+                                <Text block>Submitted by: {req.SubmitterName}</Text>
+                                <div className={styles.row}>
+                                    <Text size={300}>
+                                        {new Date(req.EventStartDate || '').toLocaleDateString()} - {new Date(req.EventEndDate || '').toLocaleDateString()}
+                                    </Text>
+                                    <Button appearance="subtle" onClick={() => { setSelectedRequest(req); setIsDetailsModalOpen(true); }}>
+                                        View Details
+                                    </Button>
+                                </div>
+                            </>
+                        }
                     />
                     <div style={{ padding: '0 12px 12px 12px' }}>
                         <Text block><strong>Location:</strong> {req.EventLocation}</Text>
@@ -205,6 +227,12 @@ export const AccountingInterface: React.FC = () => {
                     </DialogBody>
                 </DialogSurface>
             </Dialog>
+
+            <RequestDetailsModal
+                isOpen={isDetailsModalOpen}
+                onClose={() => setIsDetailsModalOpen(false)}
+                request={selectedRequest}
+            />
         </div>
     );
 };
