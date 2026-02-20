@@ -66,11 +66,11 @@ const useStyles = makeStyles({
     }
 });
 
-interface IRequestFormProps {
+interface IRequestSubFormProps {
     onSubmitSuccess: () => void;
 }
 
-export const RequestForm: React.FC<IRequestFormProps> = ({ onSubmitSuccess }) => {
+export const RequestSubForm: React.FC<IRequestSubFormProps> = ({ onSubmitSuccess }) => {
     const styles = useStyles();
     const { spService, currentUser, graphService } = useAppContext();
 

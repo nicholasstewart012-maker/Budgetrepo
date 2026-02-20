@@ -9,9 +9,11 @@ import {
     Spinner
 } from '@fluentui/react-components';
 import { useAppContext } from '../../../../context/AppContext';
-import { RequestForm } from './RequestForm';
-import { MyRequestsQueue } from './MyRequestsQueue';
+import { RequestSubForm } from './RequestSubForm';
+import { MyRequestsQueueList } from './MyRequestsQueueList';
 import { IConferenceRequest } from '../../../../models/IConferenceRequest';
+
+// Trigger IDE cache refresh
 
 const useStyles = makeStyles({
     root: {
@@ -60,14 +62,14 @@ export const UserInterface: React.FC = () => {
             </TabList>
 
             {activeTab === 'form' && (
-                <RequestForm onSubmitSuccess={() => setActiveTab('queue')} />
+                <RequestSubForm onSubmitSuccess={() => setActiveTab('queue')} />
             )}
 
             {activeTab === 'queue' && (
                 loading ? (
                     <Spinner label="Loading your requests..." />
                 ) : (
-                    <MyRequestsQueue requests={myRequests} />
+                    <MyRequestsQueueList requests={myRequests} />
                 )
             )}
         </div>

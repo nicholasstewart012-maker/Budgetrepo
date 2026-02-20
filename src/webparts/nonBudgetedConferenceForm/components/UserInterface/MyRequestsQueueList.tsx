@@ -35,11 +35,11 @@ const useStyles = makeStyles({
     }
 });
 
-interface IMyRequestsQueueProps {
+interface IMyRequestsQueueListProps {
     requests: IConferenceRequest[];
 }
 
-export const MyRequestsQueue: React.FC<IMyRequestsQueueProps> = ({ requests }) => {
+export const MyRequestsQueueList: React.FC<IMyRequestsQueueListProps> = ({ requests }) => {
     const styles = useStyles();
 
     if (requests.length === 0) {
