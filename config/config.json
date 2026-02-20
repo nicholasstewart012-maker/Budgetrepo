@@ -1,0 +1,18 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/config.2.0.schema.json",
+  "version": "2.0",
+  "bundles": {
+    "non-budgeted-conference-form-web-part": {
+      "components": [
+        {
+          "entrypoint": "./lib/webparts/nonBudgetedConferenceForm/NonBudgetedConferenceFormWebPart.js",
+          "manifest": "./src/webparts/nonBudgetedConferenceForm/NonBudgetedConferenceFormWebPart.manifest.json"
+        }
+      ]
+    }
+  },
+  "externals": {},
+  "localizedResources": {
+    "NonBudgetedConferenceFormWebPartStrings": "lib/webparts/nonBudgetedConferenceForm/loc/{locale}.js"
+  }
+}

@@ -1,0 +1,126 @@
+﻿
+> non-budgeted-conference-form@0.0.1 build
+> heft test --clean --production && heft package-solution --production
+
+ ---- build started ---- 
+[build:clean] Deleted 0 files and 3 folders
+[build:set-browserslist-ignore-old-data-env-var] Setting environment variable BROWSERSLIST_IGNORE_OLD_DATA=1
+[build:sass] Generating sass typings...
+[build:copy-javascript] Copied 2 files and linked 0 files
+[build:sass] Generated sass typings
+[build:typescript] Using TypeScript version 5.8.3
+[build:typescript] Encountered 3 TypeScript issues:
+node.exe : 
+[build:typescript] 
+Error: src/webparts/non
+BudgetedConferenceForm/
+components/Shared/Statu
+sBadge.tsx:3:31 - 
+(TS2307) Cannot find 
+module '../../../models
+/IConferenceRequest' 
+or its corresponding 
+type declarations.
+At line:1 char:1
++ & "C:\Program 
+Files\nodejs/node.exe" 
+"C:\Program 
+Files\nodejs/node_mo 
+...
++ ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: ([build:typesc   
+ ri...e declaration    
+s.:String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+[build:typescript] 
+Error: src/webparts/non
+BudgetedConferenceForm/
+components/Shared/Statu
+sBadge.tsx:26:33 - 
+(TS2551) Property 'colo
+rPaletteOrangeBackgroun
+d1' does not exist on 
+type 'Record<ColorPalet
+teRed | 
+ColorPaletteGreen | 
+ColorPaletteDarkOrange 
+| ColorPaletteYellow | 
+... 47 more ... | 
+keyof ZIndexTokens, 
+string>'. Did you mean 
+'colorPaletteDarkOrange
+Background1'?
+[build:typescript] 
+Error: src/webparts/non
+BudgetedConferenceForm/
+components/Shared/Statu
+sBadge.tsx:27:23 - 
+(TS2551) Property 'colo
+rPaletteOrangeForegroun
+d1' does not exist on 
+type 'Record<ColorPalet
+teRed | 
+ColorPaletteGreen | 
+ColorPaletteDarkOrange 
+| ColorPaletteYellow | 
+... 47 more ... | 
+keyof ZIndexTokens, 
+string>'. Did you mean 
+'colorPaletteDarkOrange
+Foreground1'?
+[build:typescript] Copied 8 files and linked 0 files
+-------------------- Failed (2.475s) --------------------
+Encountered 3 errors
+  [build:typescript] sr
+c/webparts/nonBudgetedC
+onferenceForm/component
+s/Shared/StatusBadge.ts
+x:3:31 - (TS2307) 
+Cannot find module '../
+../../models/IConferenc
+eRequest' or its 
+corresponding type 
+declarations.
+  [build:typescript] sr
+c/webparts/nonBudgetedC
+onferenceForm/component
+s/Shared/StatusBadge.ts
+x:26:33 - (TS2551) 
+Property 'colorPaletteO
+rangeBackground1' does 
+not exist on type 'Reco
+rd<ColorPaletteRed | 
+ColorPaletteGreen | 
+ColorPaletteDarkOrange 
+| ColorPaletteYellow | 
+... 47 more ... | 
+keyof ZIndexTokens, 
+string>'. Did you mean 
+'colorPaletteDarkOrange
+Background1'?
+  [build:typescript] sr
+c/webparts/nonBudgetedC
+onferenceForm/component
+s/Shared/StatusBadge.ts
+x:27:23 - (TS2551) 
+Property 'colorPaletteO
+rangeForeground1' does 
+not exist on type 'Reco
+rd<ColorPaletteRed | 
+ColorPaletteGreen | 
+ColorPaletteDarkOrange 
+| ColorPaletteYellow | 
+... 47 more ... | 
+keyof ZIndexTokens, 
+string>'. Did you mean 
+'colorPaletteDarkOrange
+Foreground1'?
