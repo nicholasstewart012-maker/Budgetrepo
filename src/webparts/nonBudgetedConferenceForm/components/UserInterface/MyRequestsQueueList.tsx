@@ -4,6 +4,7 @@ import {
     Card,
     CardHeader,
     Text,
+    Button,
     tokens,
     shorthands
 } from '@fluentui/react-components';
@@ -37,9 +38,10 @@ const useStyles = makeStyles({
 
 interface IMyRequestsQueueListProps {
     requests: IConferenceRequest[];
+    onEditDraft: (request: IConferenceRequest) => void;
 }
 
-export const MyRequestsQueueList: React.FC<IMyRequestsQueueListProps> = ({ requests }) => {
+export const MyRequestsQueueList: React.FC<IMyRequestsQueueListProps> = ({ requests, onEditDraft }) => {
     const styles = useStyles();
 
     if (requests.length === 0) {
@@ -90,6 +92,14 @@ export const MyRequestsQueueList: React.FC<IMyRequestsQueueListProps> = ({ reque
                             <Text block style={{ marginTop: 8, color: tokens.colorPaletteGreenForeground1 }}>
                                 <strong>Assigned GL Code:</strong> {req.GLCode}
                             </Text>
+                        )}
+
+                        {req.Status === 'Draft' && (
+                            <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end' }}>
+                                <Button appearance="primary" onClick={() => onEditDraft(req)}>
+                                    Edit Draft
+                                </Button>
+                            </div>
                         )}
                     </div>
                 </Card>

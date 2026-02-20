@@ -30,6 +30,7 @@ export const UserInterface: React.FC = () => {
     const [activeTab, setActiveTab] = useState<string>('form');
     const [myRequests, setMyRequests] = useState<IConferenceRequest[]>([]);
     const [loading, setLoading] = useState(false);
+    const [draftToEdit, setDraftToEdit] = useState<IConferenceRequest | undefined>(undefined);
 
     const loadMyRequests = async () => {
         setLoading(true);
@@ -51,7 +52,17 @@ export const UserInterface: React.FC = () => {
     }, [activeTab]);
 
     const handleTabSelect = (event: SelectTabEvent, data: SelectTabData) => {
-        setActiveTab(data.value as string);
+        const newValue = data.value as string;
+        if (newValue === 'form' && activeTab !== 'form') {
+            // Clear draft when manually switching to the form tab
+            setDraftToEdit(undefined);
+        }
+        setActiveTab(newValue);
+    };
+
+    const handleEditDraft = (req: IConferenceRequest) => {
+        setDraftToEdit(req);
+        setActiveTab('form');
     };
 
     return (
@@ -62,14 +73,20 @@ export const UserInterface: React.FC = () => {
             </TabList>
 
             {activeTab === 'form' && (
-                <RequestSubForm onSubmitSuccess={() => setActiveTab('queue')} />
+                <RequestSubForm
+                    draftData={draftToEdit}
+                    onSubmitSuccess={() => {
+                        setDraftToEdit(undefined);
+                        setActiveTab('queue');
+                    }}
+                />
             )}
 
             {activeTab === 'queue' && (
                 loading ? (
                     <Spinner label="Loading your requests..." />
                 ) : (
-                    <MyRequestsQueueList requests={myRequests} />
+                    <MyRequestsQueueList requests={myRequests} onEditDraft={handleEditDraft} />
                 )
             )}
         </div>

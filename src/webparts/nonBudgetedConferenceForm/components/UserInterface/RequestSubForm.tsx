@@ -68,9 +68,10 @@ const useStyles = makeStyles({
 
 interface IRequestSubFormProps {
     onSubmitSuccess: () => void;
+    draftData?: IConferenceRequest;
 }
 
-export const RequestSubForm: React.FC<IRequestSubFormProps> = ({ onSubmitSuccess }) => {
+export const RequestSubForm: React.FC<IRequestSubFormProps> = ({ onSubmitSuccess, draftData }) => {
     const styles = useStyles();
     const { spService, currentUser, graphService } = useAppContext();
 
@@ -101,6 +102,28 @@ export const RequestSubForm: React.FC<IRequestSubFormProps> = ({ onSubmitSuccess
     const [startDate, setStartDate] = useState<string>('');
     const [endDate, setEndDate] = useState<string>('');
     const [selectedPriorities, setSelectedPriorities] = useState<string[]>([]);
+
+    React.useEffect(() => {
+        if (draftData) {
+            setFormData({
+                ...draftData
+            });
+            if (draftData.EventStartDate) {
+                setStartDate(draftData.EventStartDate.split('T')[0]);
+            }
+            if (draftData.EventEndDate) {
+                setEndDate(draftData.EventEndDate.split('T')[0]);
+            }
+            if (draftData.CorporatePriorities) {
+                try {
+                    const parsed = JSON.parse(draftData.CorporatePriorities);
+                    setSelectedPriorities(Array.isArray(parsed) ? parsed : []);
+                } catch (e) {
+                    setSelectedPriorities([]);
+                }
+            }
+        }
+    }, [draftData]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
@@ -171,7 +194,12 @@ export const RequestSubForm: React.FC<IRequestSubFormProps> = ({ onSubmitSuccess
                 SubmittedDate: status === 'Pending Manager Approval' ? new Date().toISOString() : undefined
             };
 
-            await spService.createRequest(payload);
+            if (draftData && draftData.Id) {
+                await spService.updateRequest(draftData.Id, payload);
+            } else {
+                await spService.createRequest(payload);
+            }
+
             onSubmitSuccess();
 
         } catch (err) {
@@ -260,35 +288,35 @@ export const RequestSubForm: React.FC<IRequestSubFormProps> = ({ onSubmitSuccess
                 <div className={styles.row}>
                     <div className={styles.fieldGroup}>
                         <Label required>Registration Cost</Label>
-                        <Input type="number" name="RegistrationCost" value={formData.RegistrationCost?.toString()} onChange={handleCostChange} contentBefore="$" />
+                        <Input type="number" step="0.01" min="0" name="RegistrationCost" value={formData.RegistrationCost?.toString()} onChange={handleCostChange} contentBefore="$" />
                     </div>
                     <div className={styles.fieldGroup}>
                         <Label required>Airfare Cost</Label>
-                        <Input type="number" name="AirfareCost" value={formData.AirfareCost?.toString()} onChange={handleCostChange} contentBefore="$" />
+                        <Input type="number" step="0.01" min="0" name="AirfareCost" value={formData.AirfareCost?.toString()} onChange={handleCostChange} contentBefore="$" />
                     </div>
                     <div className={styles.fieldGroup}>
                         <Label required>Lodging Cost</Label>
-                        <Input type="number" name="LodgingCost" value={formData.LodgingCost?.toString()} onChange={handleCostChange} contentBefore="$" />
+                        <Input type="number" step="0.01" min="0" name="LodgingCost" value={formData.LodgingCost?.toString()} onChange={handleCostChange} contentBefore="$" />
                     </div>
                     <div className={styles.fieldGroup}>
                         <Label required>Meeting Room Rental Cost</Label>
-                        <Input type="number" name="MeetingRoomRentalCost" value={formData.MeetingRoomRentalCost?.toString()} onChange={handleCostChange} contentBefore="$" />
+                        <Input type="number" step="0.01" min="0" name="MeetingRoomRentalCost" value={formData.MeetingRoomRentalCost?.toString()} onChange={handleCostChange} contentBefore="$" />
                     </div>
                     <div className={styles.fieldGroup}>
                         <Label required>Car Rental Cost</Label>
-                        <Input type="number" name="CarRentalCost" value={formData.CarRentalCost?.toString()} onChange={handleCostChange} contentBefore="$" />
+                        <Input type="number" step="0.01" min="0" name="CarRentalCost" value={formData.CarRentalCost?.toString()} onChange={handleCostChange} contentBefore="$" />
                     </div>
                     <div className={styles.fieldGroup}>
                         <Label required>Travel Meal Allowance</Label>
-                        <Input type="number" name="TravelMealAllowanceCost" value={formData.TravelMealAllowanceCost?.toString()} onChange={handleCostChange} contentBefore="$" />
+                        <Input type="number" step="0.01" min="0" name="TravelMealAllowanceCost" value={formData.TravelMealAllowanceCost?.toString()} onChange={handleCostChange} contentBefore="$" />
                     </div>
                     <div className={styles.fieldGroup}>
                         <Label required>Conference Meals Cost</Label>
-                        <Input type="number" name="ConferenceMealsCost" value={formData.ConferenceMealsCost?.toString()} onChange={handleCostChange} contentBefore="$" />
+                        <Input type="number" step="0.01" min="0" name="ConferenceMealsCost" value={formData.ConferenceMealsCost?.toString()} onChange={handleCostChange} contentBefore="$" />
                     </div>
                     <div className={styles.fieldGroup}>
                         <Label required>Other Cost</Label>
-                        <Input type="number" name="OtherCost" value={formData.OtherCost?.toString()} onChange={handleCostChange} contentBefore="$" />
+                        <Input type="number" step="0.01" min="0" name="OtherCost" value={formData.OtherCost?.toString()} onChange={handleCostChange} contentBefore="$" />
                     </div>
                 </div>
 
@@ -306,7 +334,9 @@ export const RequestSubForm: React.FC<IRequestSubFormProps> = ({ onSubmitSuccess
             {errorMsg && <Text className={styles.errorText}>{errorMsg}</Text>}
 
             <div className={styles.actions}>
-                <Button disabled={loading} onClick={() => submitForm('Draft')}>Save as Draft</Button>
+                <Button disabled={loading} onClick={() => submitForm('Draft')}>
+                    {draftData?.Id ? 'Update Draft' : 'Save as Draft'}
+                </Button>
                 <Button appearance="primary" disabled={loading} onClick={() => submitForm('Pending Manager Approval')}>
                     {loading ? <Spinner size="tiny" /> : 'Submit for Manager Approval'}
                 </Button>

@@ -3,7 +3,7 @@
   "solution": {
     "name": "non-budgeted-conference-form-client-side-solution",
     "id": "d573b7c3-4bbd-4389-be4c-d54215d7f0d8",
-    "version": "1.0.0.0",
+    "version": "1.1.0.0",
     "includeClientSideAssets": true,
     "skipFeatureDeployment": true,
     "isDomainIsolated": false,
@@ -30,7 +30,7 @@
         "title": "non-budgeted-conference-form Feature",
         "description": "The feature that activates elements of the non-budgeted-conference-form solution.",
         "id": "ac89c2cf-7113-4dce-9194-7e4b74e57a7b",
-        "version": "1.0.0.0"
+        "version": "1.1.0.0"
       }
     ]
   },
