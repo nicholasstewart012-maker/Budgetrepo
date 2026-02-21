@@ -3,7 +3,6 @@ import { WebPartContext } from '@microsoft/sp-webpart-base';
 import { IUser } from '../models/IUser';
 import { SharePointService } from '../services/SharePointService';
 import { GraphService } from '../services/GraphService';
-import { RoleService } from '../services/RoleService';
 
 export type ViewType = 'User' | 'Manager' | 'OrgDev' | 'Accounting';
 

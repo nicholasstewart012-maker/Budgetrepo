@@ -20,18 +20,17 @@ const useStyles = makeStyles({
     formContainer: {
         display: 'flex',
         flexDirection: 'column',
-        gap: '24px',
-        backgroundColor: tokens.colorNeutralBackground1,
-        ...shorthands.padding('24px'),
-        ...shorthands.borderRadius('8px'),
-        boxShadow: tokens.shadow2
+        gap: '24px'
     },
     section: {
         display: 'flex',
         flexDirection: 'column',
         gap: '16px',
-        paddingBottom: '24px',
-        borderBottom: `1px solid ${tokens.colorNeutralStroke1}`
+        backgroundColor: tokens.colorNeutralBackground1,
+        ...shorthands.padding('24px'),
+        ...shorthands.borderRadius('8px'),
+        boxShadow: tokens.shadow2,
+        border: `1px solid ${tokens.colorNeutralStroke1}`
     },
     row: {
         display: 'grid',
@@ -102,6 +101,7 @@ export const RequestSubForm: React.FC<IRequestSubFormProps> = ({ onSubmitSuccess
     const [startDate, setStartDate] = useState<string>('');
     const [endDate, setEndDate] = useState<string>('');
     const [selectedPriorities, setSelectedPriorities] = useState<string[]>([]);
+    const [attachments, setAttachments] = useState<File[]>([]);
 
     React.useEffect(() => {
         if (draftData) {
@@ -194,10 +194,19 @@ export const RequestSubForm: React.FC<IRequestSubFormProps> = ({ onSubmitSuccess
                 SubmittedDate: status === 'Pending Manager Approval' ? new Date().toISOString() : undefined
             };
 
+            let reqId = draftData?.Id;
+
             if (draftData && draftData.Id) {
                 await spService.updateRequest(draftData.Id, payload);
             } else {
-                await spService.createRequest(payload);
+                const newReq = await spService.createRequest(payload);
+                reqId = newReq.Id;
+            }
+
+            if (reqId && attachments.length > 0) {
+                for (const file of attachments) {
+                    await spService.addAttachment(reqId, file);
+                }
             }
 
             onSubmitSuccess();
@@ -271,7 +280,7 @@ export const RequestSubForm: React.FC<IRequestSubFormProps> = ({ onSubmitSuccess
                 </div>
 
                 <div className={styles.fieldGroup}>
-                    <Label required>Knowledge Sharing Plan</Label>
+                    <Label required>Knowledge Sharing Plan [ex: How will you share conference insights with your team and/or organization (e.g., presentations, timeline, meetings)?]</Label>
                     <Textarea name="KnowledgeSharingPlan" value={formData.KnowledgeSharingPlan} onChange={handleInputChange} />
                 </div>
 
@@ -328,6 +337,36 @@ export const RequestSubForm: React.FC<IRequestSubFormProps> = ({ onSubmitSuccess
                 <div className={styles.fieldGroup} style={{ marginTop: '16px' }}>
                     <Label>Additional Comments</Label>
                     <Textarea name="AdditionalComments" value={formData.AdditionalComments} onChange={handleInputChange} />
+                </div>
+            </div>
+
+            {/* SECTION 4: Attachments */}
+            <div className={styles.section}>
+                <Text weight="semibold" size={500}>4. Attachments</Text>
+                <div className={styles.fieldGroup}>
+                    <Label>Attach Files (Agendas, Itineraries, Quotes, etc.)</Label>
+                    <input
+                        type="file"
+                        multiple
+                        onChange={(e) => {
+                            if (e.target.files) {
+                                setAttachments(Array.from(e.target.files));
+                            }
+                        }}
+                    />
+                    {attachments.length > 0 && (
+                        <div style={{ marginTop: '12px' }}>
+                            <Text weight="semibold">Selected Files:</Text>
+                            <ul style={{ margin: '4px 0', paddingLeft: '20px' }}>
+                                {attachments.map((f, i) => (
+                                    <li key={i}>
+                                        <Text size={200}>{f.name} ({(f.size / 1024).toFixed(1)} KB)</Text>
+                                    </li>
+                                ))}
+                            </ul>
+                            <Button appearance="subtle" size="small" onClick={() => setAttachments([])}>Clear Attachments</Button>
+                        </div>
+                    )}
                 </div>
             </div>
 

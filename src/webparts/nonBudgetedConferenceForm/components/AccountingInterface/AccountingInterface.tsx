@@ -3,15 +3,8 @@ import { useState, useEffect } from 'react';
 import {
     makeStyles,
     Card,
-    CardHeader,
     Text,
     Button,
-    Dialog,
-    DialogSurface,
-    DialogTitle,
-    DialogBody,
-    DialogActions,
-    DialogContent,
     Textarea,
     Input,
     Label,
@@ -23,34 +16,65 @@ import { IConferenceRequest } from '../../../../models/IConferenceRequest';
 import { useAppContext } from '../../../../context/AppContext';
 import { StatusBadge } from '../Shared/StatusBadge';
 import { RequestDetailsModal } from '../Shared/RequestDetailsModal';
+import { SpfxModal } from '../Shared/SpfxModal';
 
 const useStyles = makeStyles({
     root: {
         display: 'flex',
         flexDirection: 'column',
-        gap: '16px'
+        gap: '16px',
     },
     card: {
         ...shorthands.margin('0px'),
-        width: '100%'
-    },
-    actions: {
-        display: 'flex',
-        gap: '8px',
-        marginTop: '16px',
-        borderTop: `1px solid ${tokens.colorNeutralStroke1}`,
-        paddingTop: '16px'
-    },
-    dialogContent: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '16px'
+        width: '100%',
+        boxShadow: tokens.shadow2,
+        border: `1px solid ${tokens.colorNeutralStroke1}`
     },
     row: {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        width: '100%'
+        paddingBottom: '8px',
+        borderBottom: `1px solid ${tokens.colorNeutralStroke2}`
+    },
+    metaRow: {
+        display: 'flex',
+        gap: '24px',
+        flexWrap: 'wrap',
+        paddingTop: '12px'
+    },
+    metricBlock: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '2px'
+    },
+    metricLabel: {
+        fontSize: '11px',
+        color: tokens.colorNeutralForeground3,
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px',
+        fontWeight: 'semibold'
+    },
+    metricValue: {
+        fontSize: '14px',
+        color: tokens.colorNeutralForeground1,
+        fontWeight: 'semibold'
+    },
+    actions: {
+        display: 'flex',
+        justifyContent: 'flex-end',
+        gap: '8px',
+        marginTop: '16px',
+        paddingTop: '16px',
+        borderTop: `1px dashed ${tokens.colorNeutralStroke2}`
+    },
+    formField: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '6px',
+    },
+    textarea: {
+        minHeight: '120px',
     }
 });
 
@@ -60,23 +84,17 @@ export const AccountingInterface: React.FC = () => {
 
     const [requests, setRequests] = useState<IConferenceRequest[]>([]);
     const [loading, setLoading] = useState(false);
-
     const [selectedRequest, setSelectedRequest] = useState<IConferenceRequest | undefined>(undefined);
-
     const [denialReason, setDenialReason] = useState('');
-    const [isDenialDialogOpen, setIsDenialDialogOpen] = useState(false);
-
+    const [isDenialOpen, setIsDenialOpen] = useState(false);
     const [glCode, setGlCode] = useState('');
-    const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
-
-    // View Details State
-    const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+    const [isApprovalOpen, setIsApprovalOpen] = useState(false);
+    const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
     const loadRequests = async () => {
         setLoading(true);
         try {
-            const filter = `Status eq 'Pending Accounting Approval'`;
-            const result = await spService.getRequests(filter);
+            const result = await spService.getRequests(`Status eq 'Pending Accounting Approval'`);
             setRequests(result);
         } catch (error) {
             console.error('Error loading accounting queue:', error);
@@ -85,12 +103,10 @@ export const AccountingInterface: React.FC = () => {
         }
     };
 
-    useEffect(() => {
-        void loadRequests();
-    }, []);
+    useEffect(() => { void loadRequests(); }, []);
 
     const handleApprove = async () => {
-        if (!selectedRequest || !selectedRequest.Id || !glCode.trim()) return;
+        if (!selectedRequest?.Id || !glCode.trim()) return;
         try {
             await spService.updateRequest(selectedRequest.Id, {
                 Status: 'Fully Approved',
@@ -98,7 +114,7 @@ export const AccountingInterface: React.FC = () => {
                 AccountingApprovalDate: new Date().toISOString(),
                 GLCode: glCode.trim()
             });
-            setIsApprovalDialogOpen(false);
+            setIsApprovalOpen(false);
             setGlCode('');
             void loadRequests();
         } catch (error) {
@@ -107,7 +123,7 @@ export const AccountingInterface: React.FC = () => {
     };
 
     const handleDeny = async () => {
-        if (!selectedRequest || !selectedRequest.Id || !denialReason) return;
+        if (!selectedRequest?.Id || !denialReason) return;
         try {
             await spService.updateRequest(selectedRequest.Id, {
                 Status: 'Denied',
@@ -115,24 +131,12 @@ export const AccountingInterface: React.FC = () => {
                 AccountingApproverEmail: currentUser.email,
                 AccountingApprovalDate: new Date().toISOString()
             });
-            setIsDenialDialogOpen(false);
+            setIsDenialOpen(false);
             setDenialReason('');
             void loadRequests();
         } catch (error) {
             console.error('Error denying request', error);
         }
-    };
-
-    const openApproveDialog = (req: IConferenceRequest) => {
-        setSelectedRequest(req);
-        setGlCode('');
-        setIsApprovalDialogOpen(true);
-    };
-
-    const openDenyDialog = (req: IConferenceRequest) => {
-        setSelectedRequest(req);
-        setDenialReason('');
-        setIsDenialDialogOpen(true);
     };
 
     return (
@@ -142,95 +146,108 @@ export const AccountingInterface: React.FC = () => {
             {loading && <Spinner label="Loading pending requests..." />}
 
             {!loading && requests.length === 0 && (
-                <Text>There are no requests pending Accounting approval.</Text>
+                <div style={{ textAlign: 'center', padding: '40px', color: tokens.colorNeutralForeground3 }}>
+                    <Text size={400}>There are no requests pending Accounting approval.</Text>
+                </div>
             )}
 
             {requests.map(req => (
                 <Card key={req.Id} className={styles.card}>
-                    <CardHeader
-                        header={
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <Text weight="semibold">{req.EventName}</Text>
-                                <StatusBadge status={req.Status} />
+                    <div style={{ padding: '16px' }}>
+                        <div className={styles.row}>
+                            <Text weight="bold" size={400}>{req.EventName}</Text>
+                            <StatusBadge status={req.Status} />
+                        </div>
+                        <div className={styles.metaRow}>
+                            <div className={styles.metricBlock}>
+                                <Text className={styles.metricLabel}>SUBMITTED BY</Text>
+                                <Text className={styles.metricValue}>{req.SubmitterName}</Text>
                             </div>
-                        }
-                        description={
-                            <>
-                                <Text block>Submitted by: {req.SubmitterName}</Text>
-                                <div className={styles.row}>
-                                    <Text size={300}>
-                                        {new Date(req.EventStartDate || '').toLocaleDateString()} - {new Date(req.EventEndDate || '').toLocaleDateString()}
-                                    </Text>
-                                    <Button appearance="subtle" onClick={() => { setSelectedRequest(req); setIsDetailsModalOpen(true); }}>
-                                        View Details
-                                    </Button>
-                                </div>
-                            </>
-                        }
-                    />
-                    <div style={{ padding: '0 12px 12px 12px' }}>
-                        <Text block><strong>Location:</strong> {req.EventLocation}</Text>
-                        <Text block><strong>Dates:</strong> {new Date(req.EventStartDate || '').toLocaleDateString()} - {new Date(req.EventEndDate || '').toLocaleDateString()}</Text>
-                        <Text block><strong>Total Est. Budget:</strong> ${req.TotalEstimatedBudget?.toFixed(2) || '0.00'}</Text>
-                        <Text block><strong>Attendees:</strong> {req.Attendees}</Text>
-
+                            <div className={styles.metricBlock}>
+                                <Text className={styles.metricLabel}>DATES</Text>
+                                <Text className={styles.metricValue}>
+                                    {req.EventStartDate ? new Date(req.EventStartDate).toLocaleDateString() : 'TBD'} -&nbsp;
+                                    {req.EventEndDate ? new Date(req.EventEndDate).toLocaleDateString() : 'TBD'}
+                                </Text>
+                            </div>
+                            <div className={styles.metricBlock}>
+                                <Text className={styles.metricLabel}>LOCATION</Text>
+                                <Text className={styles.metricValue}>{req.EventLocation}</Text>
+                            </div>
+                            <div className={styles.metricBlock}>
+                                <Text className={styles.metricLabel}>TOTAL BUDGET</Text>
+                                <Text className={styles.metricValue}>${req.TotalEstimatedBudget?.toFixed(2) || '0.00'}</Text>
+                            </div>
+                        </div>
                         <div className={styles.actions}>
-                            <Button appearance="primary" onClick={() => openApproveDialog(req)}>Approve & Assign GL</Button>
-                            <Button appearance="secondary" onClick={() => openDenyDialog(req)}>Deny</Button>
+                            <Button appearance="subtle" onClick={() => { setSelectedRequest(req); setIsDetailsOpen(true); }}>
+                                View Details
+                            </Button>
+                            <Button appearance="secondary" onClick={() => { setSelectedRequest(req); setDenialReason(''); setIsDenialOpen(true); }}>
+                                Deny
+                            </Button>
+                            <Button appearance="primary" onClick={() => { setSelectedRequest(req); setGlCode(''); setIsApprovalOpen(true); }}>
+                                Approve & Assign GL
+                            </Button>
                         </div>
                     </div>
                 </Card>
             ))}
 
-            {/* Approve Dialog */}
-            <Dialog open={isApprovalDialogOpen} onOpenChange={(e, data) => setIsApprovalDialogOpen(data.open)}>
-                <DialogSurface>
-                    <DialogBody>
-                        <DialogTitle>Final Approval</DialogTitle>
-                        <DialogContent className={styles.dialogContent}>
-                            <Text>Assign a GL Code / Misc. Event Code for this request to complete final approval.</Text>
-                            <div>
-                                <Label required>GL Code</Label>
-                                <Input
-                                    value={glCode}
-                                    onChange={(e) => setGlCode(e.target.value)}
-                                    placeholder="e.g. 1234-567-890"
-                                    style={{ width: '100%' }}
-                                />
-                            </div>
-                        </DialogContent>
-                        <DialogActions>
-                            <Button appearance="secondary" onClick={() => setIsApprovalDialogOpen(false)}>Cancel</Button>
-                            <Button appearance="primary" disabled={!glCode.trim()} onClick={handleApprove}>Approve Request</Button>
-                        </DialogActions>
-                    </DialogBody>
-                </DialogSurface>
-            </Dialog>
+            {/* ── GL CODE APPROVAL MODAL ── */}
+            <SpfxModal
+                isOpen={isApprovalOpen}
+                onClose={() => setIsApprovalOpen(false)}
+                title="Final Approval"
+                subtitle="Assign a GL Code / Misc. Event Code to complete final approval."
+                footer={
+                    <>
+                        <Button appearance="secondary" onClick={() => setIsApprovalOpen(false)}>Cancel</Button>
+                        <Button appearance="primary" disabled={!glCode.trim()} onClick={handleApprove}>
+                            Approve Request
+                        </Button>
+                    </>
+                }
+            >
+                <div className={styles.formField}>
+                    <Label required>GL Code</Label>
+                    <Input
+                        value={glCode}
+                        onChange={(_e, data) => setGlCode(data.value)}
+                        placeholder="e.g. 1234-567-890"
+                        style={{ width: '100%' }}
+                    />
+                </div>
+            </SpfxModal>
 
-            {/* Deny Dialog */}
-            <Dialog open={isDenialDialogOpen} onOpenChange={(e, data) => setIsDenialDialogOpen(data.open)}>
-                <DialogSurface>
-                    <DialogBody>
-                        <DialogTitle>Deny Request</DialogTitle>
-                        <DialogContent className={styles.dialogContent}>
-                            <Text>Please provide a reason for denying this request. This will be visible to the submitter.</Text>
-                            <Textarea
-                                value={denialReason}
-                                onChange={(e) => setDenialReason(e.target.value)}
-                                placeholder="Reason for denial..."
-                            />
-                        </DialogContent>
-                        <DialogActions>
-                            <Button appearance="secondary" onClick={() => setIsDenialDialogOpen(false)}>Cancel</Button>
-                            <Button appearance="primary" disabled={!denialReason} onClick={handleDeny}>Confirm Denial</Button>
-                        </DialogActions>
-                    </DialogBody>
-                </DialogSurface>
-            </Dialog>
+            {/* ── DENY MODAL ── */}
+            <SpfxModal
+                isOpen={isDenialOpen}
+                onClose={() => setIsDenialOpen(false)}
+                title="Deny Request"
+                subtitle="Please provide a reason for denying. This will be visible to the submitter."
+                footer={
+                    <>
+                        <Button appearance="secondary" onClick={() => setIsDenialOpen(false)}>Cancel</Button>
+                        <Button appearance="primary" disabled={!denialReason} onClick={handleDeny}>
+                            Confirm Denial
+                        </Button>
+                    </>
+                }
+            >
+                <div className={styles.formField}>
+                    <Textarea
+                        className={styles.textarea}
+                        value={denialReason}
+                        onChange={(_e, data) => setDenialReason(data.value)}
+                        placeholder="Reason for denial..."
+                    />
+                </div>
+            </SpfxModal>
 
             <RequestDetailsModal
-                isOpen={isDetailsModalOpen}
-                onClose={() => setIsDetailsModalOpen(false)}
+                isOpen={isDetailsOpen}
+                onClose={() => setIsDetailsOpen(false)}
                 request={selectedRequest}
             />
         </div>

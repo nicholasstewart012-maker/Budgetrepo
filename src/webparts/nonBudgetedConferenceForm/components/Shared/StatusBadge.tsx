@@ -1,73 +1,71 @@
 import * as React from 'react';
-import { Badge, makeStyles, tokens } from '@fluentui/react-components';
+import { Badge, makeStyles } from '@fluentui/react-components';
 import { RequestStatus } from '../../../../models/IConferenceRequest';
+import { getStatusColor, getReadableTextColor, getCategoryColor } from '../../../../ui/designSystem';
 
 interface IStatusBadgeProps {
-    status: RequestStatus;
+    status?: RequestStatus;
+    category?: string;
 }
 
 const useStyles = makeStyles({
-    statusBadge: {
-        padding: '4px 8px',
-        borderRadius: '4px',
+    baseBadge: {
+        padding: '4px 12px',
+        borderRadius: '999px',
         display: 'inline-flex',
         alignItems: 'center',
-        fontWeight: 600
+        fontWeight: 600,
+        fontSize: '12px',
+        border: 'none',
+        whiteSpace: 'nowrap'
     },
-    draft: {
-        backgroundColor: tokens.colorNeutralBackground3,
-        color: tokens.colorNeutralForeground3
-    },
-    pendingManager: {
-        backgroundColor: tokens.colorPaletteYellowBackground1,
-        color: tokens.colorPaletteYellowForeground1
-    },
-    pendingOrgDev: {
-        backgroundColor: tokens.colorPaletteDarkOrangeBackground1,
-        color: tokens.colorPaletteDarkOrangeForeground1
-    },
-    pendingAccounting: {
-        backgroundColor: tokens.colorPaletteDarkOrangeBackground1,
-        color: tokens.colorPaletteDarkOrangeForeground1
-    },
-    approved: {
-        backgroundColor: tokens.colorPaletteGreenBackground1,
-        color: tokens.colorPaletteGreenForeground1
-    },
-    denied: {
-        backgroundColor: tokens.colorPaletteRedBackground1,
-        color: tokens.colorPaletteRedForeground1
+    container: {
+        display: 'flex',
+        gap: '6px',
+        alignItems: 'center',
+        flexWrap: 'wrap'
     }
 });
 
-export const StatusBadge: React.FC<IStatusBadgeProps> = ({ status }) => {
+export const StatusBadge: React.FC<IStatusBadgeProps> = ({ status, category }) => {
     const styles = useStyles();
 
-    let appearanceClass = styles.draft;
-    switch (status) {
-        case 'Draft':
-            appearanceClass = styles.draft;
-            break;
-        case 'Pending Manager Approval':
-            appearanceClass = styles.pendingManager;
-            break;
-        case 'Pending Org Dev Approval':
-            appearanceClass = styles.pendingOrgDev;
-            break;
-        case 'Pending Accounting Approval':
-            appearanceClass = styles.pendingAccounting;
-            break;
-        case 'Fully Approved':
-            appearanceClass = styles.approved;
-            break;
-        case 'Denied':
-            appearanceClass = styles.denied;
-            break;
-    }
+    const renderStatusBadge = () => {
+        if (!status) return null;
+        const bgColor = getStatusColor(status);
+        const fgColor = getReadableTextColor(bgColor);
+
+        return (
+            <Badge
+                className={styles.baseBadge}
+                style={{ backgroundColor: bgColor, color: fgColor }}
+            >
+                {status}
+            </Badge>
+        );
+    };
+
+    const renderCategoryBadge = () => {
+        if (!category) return null;
+        const catColor = getCategoryColor(category);
+        if (!catColor) return null;
+
+        const fgColor = getReadableTextColor(catColor);
+
+        return (
+            <Badge
+                className={styles.baseBadge}
+                style={{ backgroundColor: catColor, color: fgColor }}
+            >
+                {category}
+            </Badge>
+        );
+    };
 
     return (
-        <Badge className={appearanceClass} size="medium">
-            {status}
-        </Badge>
+        <div className={styles.container}>
+            {renderCategoryBadge()}
+            {renderStatusBadge()}
+        </div>
     );
 };

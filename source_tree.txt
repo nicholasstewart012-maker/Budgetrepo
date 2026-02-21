@@ -1,0 +1,50 @@
+Source Tree for src/ (Generated 2026-02-20 00:19:02)
+====================================================
+|-- webparts
+|   +-- nonBudgetedConferenceForm
+|       |-- loc
+|       |   |-- mystrings.d.ts
+|       |   +-- en-us.js
+|       |-- components
+|       |   |-- UserInterface
+|       |   |   |-- UserInterface.tsx
+|       |   |   |-- RequestSubForm.tsx
+|       |   |   +-- MyRequestsQueueList.tsx
+|       |   |-- Shared
+|       |   |   |-- StatusBadge.tsx
+|       |   |   +-- RequestDetailsModal.tsx
+|       |   |-- OrgDevInterface
+|       |   |   +-- OrgDevInterface.tsx
+|       |   |-- ManagerInterface
+|       |   |   +-- ManagerInterface.tsx
+|       |   |-- Header
+|       |   |   +-- Header.tsx
+|       |   |-- AccountingInterface
+|       |   |   +-- AccountingInterface.tsx
+|       |   |-- NonBudgetedConferenceForm.tsx
+|       |   |-- NonBudgetedConferenceForm.module.scss
+|       |   +-- INonBudgetedConferenceFormProps.ts
+|       |-- assets
+|       |   |-- welcome-light.png
+|       |   +-- welcome-dark.png
+|       |-- NonBudgetedConferenceFormWebPart.ts
+|       +-- NonBudgetedConferenceFormWebPart.manifest.json
+|-- ui
+|   +-- designSystem.ts
+|-- theme
+|   +-- BrandTheme.ts
+|-- services
+|   |-- SharePointService.ts
+|   |-- RoleService.ts
+|   +-- GraphService.ts
+|-- models
+|   |-- IUser.ts
+|   +-- IConferenceRequest.ts
+|-- hooks
+|   |-- useRoleAccess.ts
+|   |-- useManagerCheck.ts
+|   +-- useCurrentUser.ts
+|-- context
+|   +-- AppContext.tsx
++-- constants
+    +-- index.ts

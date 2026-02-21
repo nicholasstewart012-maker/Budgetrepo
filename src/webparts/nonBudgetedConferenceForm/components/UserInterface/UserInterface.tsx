@@ -6,20 +6,32 @@ import {
     Tab,
     SelectTabData,
     SelectTabEvent,
-    Spinner
+    Spinner,
+    shorthands,
+    tokens
 } from '@fluentui/react-components';
 import { useAppContext } from '../../../../context/AppContext';
 import { RequestSubForm } from './RequestSubForm';
 import { MyRequestsQueueList } from './MyRequestsQueueList';
 import { IConferenceRequest } from '../../../../models/IConferenceRequest';
 
-// Trigger IDE cache refresh
-
 const useStyles = makeStyles({
     root: {
         display: 'flex',
         flexDirection: 'column',
-        gap: '20px'
+        gap: '24px'
+    },
+    tabCard: {
+        backgroundColor: tokens.colorNeutralBackground1,
+        ...shorthands.padding('8px', '16px'),
+        ...shorthands.borderRadius('8px'),
+        boxShadow: tokens.shadow2,
+        border: `1px solid ${tokens.colorNeutralStroke1}`
+    },
+    contentArea: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '16px'
     }
 });
 
@@ -54,7 +66,6 @@ export const UserInterface: React.FC = () => {
     const handleTabSelect = (event: SelectTabEvent, data: SelectTabData) => {
         const newValue = data.value as string;
         if (newValue === 'form' && activeTab !== 'form') {
-            // Clear draft when manually switching to the form tab
             setDraftToEdit(undefined);
         }
         setActiveTab(newValue);
@@ -67,28 +78,34 @@ export const UserInterface: React.FC = () => {
 
     return (
         <div className={styles.root}>
-            <TabList selectedValue={activeTab} onTabSelect={handleTabSelect}>
-                <Tab value="form">New Request</Tab>
-                <Tab value="queue">My Requests</Tab>
-            </TabList>
+            <div className={styles.tabCard}>
+                <TabList selectedValue={activeTab} onTabSelect={handleTabSelect}>
+                    <Tab value="form">New Request</Tab>
+                    <Tab value="queue">My Requests</Tab>
+                </TabList>
+            </div>
 
-            {activeTab === 'form' && (
-                <RequestSubForm
-                    draftData={draftToEdit}
-                    onSubmitSuccess={() => {
-                        setDraftToEdit(undefined);
-                        setActiveTab('queue');
-                    }}
-                />
-            )}
+            <div className={styles.contentArea}>
+                {activeTab === 'form' && (
+                    <RequestSubForm
+                        draftData={draftToEdit}
+                        onSubmitSuccess={() => {
+                            setDraftToEdit(undefined);
+                            setActiveTab('queue');
+                        }}
+                    />
+                )}
 
-            {activeTab === 'queue' && (
-                loading ? (
-                    <Spinner label="Loading your requests..." />
-                ) : (
-                    <MyRequestsQueueList requests={myRequests} onEditDraft={handleEditDraft} />
-                )
-            )}
+                {activeTab === 'queue' && (
+                    loading ? (
+                        <div style={{ display: 'flex', justifyContent: 'center', padding: '40px' }}>
+                            <Spinner label="Loading your requests..." size="large" />
+                        </div>
+                    ) : (
+                        <MyRequestsQueueList requests={myRequests} onEditDraft={handleEditDraft} />
+                    )
+                )}
+            </div>
         </div>
     );
 };

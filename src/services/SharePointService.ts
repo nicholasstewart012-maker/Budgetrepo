@@ -97,6 +97,24 @@ export class SharePointService {
         }
     }
 
+    public async addAttachment(itemId: number, file: File): Promise<void> {
+        const encodedFileName = encodeURIComponent(file.name);
+        const url = `${this.getListUrl()}/items(${itemId})/AttachmentFiles/add(FileName='${encodedFileName}')`;
+        const options: ISPHttpClientOptions = {
+            body: file
+        };
+
+        try {
+            const response: SPHttpClientResponse = await this.context.spHttpClient.post(url, SPHttpClient.configurations.v1, options);
+            if (!response.ok) {
+                throw new Error(await response.text());
+            }
+        } catch (error) {
+            console.error(`Error adding attachment ${file.name} to request ${itemId}`, error);
+            throw error;
+        }
+    }
+
     private calculateTotal(req: Partial<IConferenceRequest>): number {
         return (req.RegistrationCost || 0) +
             (req.AirfareCost || 0) +

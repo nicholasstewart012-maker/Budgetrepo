@@ -1,34 +1,44 @@
 @import '~@fluentui/react/dist/sass/References.scss';
 
-.nonBudgetedConferenceForm {
-  overflow: hidden;
-  padding: 1em;
-  color: "[theme:bodyText, default: #323130]";
-  color: var(--bodyText);
-  &.teams {
-    font-family: $ms-font-family-fallbacks;
-  }
+.appRoot {
+  background-color: #f4f4f4;
+  min-height: 100vh;
+  position: relative;
+  font-family: 'Segoe UI', 'Segoe UI Web (West European)', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif;
 }
 
-.welcome {
-  text-align: center;
+.appContainer {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px;
 }
 
-.welcomeImage {
+.appHeaderSlot {
+  margin-bottom: 24px;
+}
+
+.appContent {
   width: 100%;
-  max-width: 420px;
 }
 
-.links {
-  a {
-    text-decoration: none;
-    color: "[theme:link, default:#03787c]";
-    color: var(--link); // note: CSS Custom Properties support is limited to modern browsers only
+.contentGrid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
 
-    &:hover {
-      text-decoration: underline;
-      color: "[theme:linkHovered, default: #014446]";
-      color: var(--linkHovered); // note: CSS Custom Properties support is limited to modern browsers only
-    }
+  @media screen and (max-width: 1024px) {
+    grid-template-columns: 1fr;
   }
+}
+
+.mainColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.sideColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
