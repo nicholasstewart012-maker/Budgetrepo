@@ -205,36 +205,27 @@ def _detect_question_intents(question: str) -> dict[str, bool]:
     }
 def _is_document_discovery_question(question: str) -> bool:
     q = _norm_text(question)
+    if not q:
+        return False
+
+    doc_terms = r"(?:policy|policies|procedure|procedures|document|documents|standard|standards|guideline|guidelines|plan|plans)"
+    action_terms = r"(?:talk(?:s)? about|cover(?:s)?|mention(?:s)?|address(?:es)?|say(?:s)?|discuss(?:es)?|handle(?:s)?|appl(?:y|ies) to|is about|are about|reference(?:s)?)"
+    starter_terms = r"(?:what|which)"
+
     patterns = (
-        "what policy talks about",
-        "what policy covers",
-        "what policy mentions",
-        "what policy addresses",
-        "what procedure talks about",
-        "what procedure covers",
-        "what procedure mentions",
-        "what procedure addresses",
-        "which policy talks about",
-        "which policy covers",
-        "which policy mentions",
-        "which policy addresses",
-        "which procedure talks about",
-        "which procedure covers",
-        "which procedure mentions",
-        "which procedure addresses",
-        "what document talks about",
-        "what document covers",
-        "what document mentions",
-        "what document addresses",
-        "which document talks about",
-        "which document covers",
-        "which document mentions",
-        "which document addresses",
-        "where is",
-        "what policy is about",
-        "what procedure is about",
+        rf"\b{starter_terms}\s+{doc_terms}\b",
+        rf"\b{doc_terms}\s+{action_terms}\b",
+        rf"\bwhere\s+(?:is|are|can|would|should)\b",
+        rf"\bdo\s+we\s+have\s+(?:a|an|any)?\s*{doc_terms}\b",
+        rf"\bis\s+there\s+(?:a|an|any)?\s*{doc_terms}\b",
+        rf"\bare\s+there\s+(?:any)?\s*{doc_terms}\b",
     )
-    return any(pattern in q for pattern in patterns)
+    if any(re.search(pattern, q) for pattern in patterns):
+        return True
+
+    has_doc_term = bool(re.search(rf"\b{doc_terms}\b", q))
+    has_action_term = bool(re.search(rf"\b{action_terms}\b", q))
+    return has_doc_term and has_action_term
 def _expand_keyword_query(question: str) -> str:
     q_norm = _norm_text(question)
     extras: list[str] = []
@@ -702,7 +693,8 @@ def _rerank_retrieval_chunks(question: str, vector_results: list[dict], bm25_res
         title_overlap = _token_overlap_score(question, source_title)
         question_sentence = _question_sentence_match_score(question, text[:400])
         vector_score = _clamp01(float(item.get("vector_score", 0.0) or 0.0))
-        bm25_score = min(float(item.get("bm25_score", 0.0) or 0.0) / max(MIN_BM25_SCORE * 2.0, 1.0), 1.0)
+        raw_bm25_score = float(item.get("bm25_score", 0.0) or 0.0)
+        bm25_score = _clamp01(raw_bm25_score)
         if is_doc_discovery:
             score = (
                 (vector_score * 0.22)
@@ -733,6 +725,7 @@ def _rerank_retrieval_chunks(question: str, vector_results: list[dict], bm25_res
         score += adjustment
         item["rerank_score"] = round(_clamp01(score), 4)
         item["retrieval_score"] = round(max(vector_score, bm25_score), 4)
+        item["bm25_score_normalized"] = round(bm25_score, 4)
         item["ranking_notes"] = ranking_notes
         item["selection_reason"] = ", ".join(ranking_notes[:4]) if ranking_notes else "baseline"
         ranked.append(item)
@@ -1722,6 +1715,8 @@ async def query_spark(question: str, user: str = "local_user") -> tuple[dict, di
     timing: dict[str, int] = {}
     fallback_used = False
     is_doc_discovery = _is_document_discovery_question(question)
+    if is_doc_discovery:
+        print(f"[Spark Query] Document discovery mode triggered for question='{question}'")
     t = time.perf_counter()
     history = await load_history(user, limit=20)
     timing["history_load_ms"] = _ms(t)
@@ -1758,6 +1753,15 @@ async def query_spark(question: str, user: str = "local_user") -> tuple[dict, di
         reranked_chunks = fts_chunks[:5]
         fallback_used = True
     retrieved_chunks = _dedupe_retrieval_chunks(reranked_chunks)
+    for idx, item in enumerate(reranked_chunks[:5], start=1):
+        print(
+            "[Spark Query BM25] "
+            f"rank={idx} "
+            f"doc={item.get('source_title') or item.get('source_name') or item.get('source')} "
+            f"raw={round(float(item.get('bm25_score', 0.0) or 0.0), 4)} "
+            f"normalized={round(float(item.get('bm25_score_normalized', 0.0) or 0.0), 4)} "
+            f"rerank={item.get('rerank_score')}"
+        )
     context, source_index, seen_sources = _build_context_payload(reranked_chunks)
     print(
         "[Spark Query Counts] "
@@ -1782,6 +1786,12 @@ async def query_spark(question: str, user: str = "local_user") -> tuple[dict, di
             answer = _fallback_answer()
             fallback_used = True
         elif is_doc_discovery:
+            if topic_terms and not topic_ok:
+                print(
+                    "[Spark Query] Topic guard bypassed for document discovery "
+                    f"coverage={topic_guard.get('coverage')} "
+                    f"missing={topic_guard.get('missing_terms')}"
+                )
             answer = _build_document_discovery_answer(seen_sources)
         else:
             answer = await build_answer(question, context, history, source_index=source_index, document_discovery=is_doc_discovery)
