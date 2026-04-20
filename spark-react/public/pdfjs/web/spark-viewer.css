@@ -1,0 +1,46 @@
+/* 
+ * Spark PDF Viewer Simplification
+ * Hides advanced/noisy controls for business users.
+ */
+
+#sidebarToggle,
+#secondaryToolbarToggle,
+#presentationMode,
+#openFile,
+#print,
+#download,
+#viewBookmark,
+#editorModeButtons,
+#editorFreeTextButton,
+#editorInkButton,
+#editorStampButton,
+#editorHighlightButton,
+#toolbarViewerRight .toolbarButton,
+#toolbarSidebar,
+.verticalToolbarSeparator {
+  display: none !important;
+}
+
+/* Ensure the find/search button stays visible */
+#viewFind {
+  display: inline-flex !important;
+}
+
+#toolbarContainer {
+  background: #f8fafc !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+#toolbarViewer {
+  height: 36px !important;
+}
+
+.toolbarButton,
+.dropdownToolbarButton,
+#scaleSelect {
+  border-radius: 6px !important;
+}
+
+#viewerContainer {
+  background: #d1d5db !important;
+}

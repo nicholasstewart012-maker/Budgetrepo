@@ -203,6 +203,38 @@ def _detect_question_intents(question: str) -> dict[str, bool]:
         intent: any(term in q_norm for term in keywords)
         for intent, keywords in intent_keywords.items()
     }
+def _is_document_discovery_question(question: str) -> bool:
+    q = _norm_text(question)
+    patterns = (
+        "what policy talks about",
+        "what policy covers",
+        "what policy mentions",
+        "what policy addresses",
+        "what procedure talks about",
+        "what procedure covers",
+        "what procedure mentions",
+        "what procedure addresses",
+        "which policy talks about",
+        "which policy covers",
+        "which policy mentions",
+        "which policy addresses",
+        "which procedure talks about",
+        "which procedure covers",
+        "which procedure mentions",
+        "which procedure addresses",
+        "what document talks about",
+        "what document covers",
+        "what document mentions",
+        "what document addresses",
+        "which document talks about",
+        "which document covers",
+        "which document mentions",
+        "which document addresses",
+        "where is",
+        "what policy is about",
+        "what procedure is about",
+    )
+    return any(pattern in q for pattern in patterns)
 def _expand_keyword_query(question: str) -> str:
     q_norm = _norm_text(question)
     extras: list[str] = []
@@ -661,6 +693,7 @@ def _rerank_retrieval_chunks(question: str, vector_results: list[dict], bm25_res
     question_tokens = set(_tokenize_for_search(question))
     question_numbers = _extract_numbers(question)
     intents = _detect_question_intents(question)
+    is_doc_discovery = _is_document_discovery_question(question)
     ranked: list[dict] = []
     for item in combined.values():
         text = item.get("text", "")
@@ -670,19 +703,32 @@ def _rerank_retrieval_chunks(question: str, vector_results: list[dict], bm25_res
         question_sentence = _question_sentence_match_score(question, text[:400])
         vector_score = _clamp01(float(item.get("vector_score", 0.0) or 0.0))
         bm25_score = min(float(item.get("bm25_score", 0.0) or 0.0) / max(MIN_BM25_SCORE * 2.0, 1.0), 1.0)
-        score = (
-            (vector_score * 0.30)
-            + (bm25_score * 0.20)
-            + (overlap * 0.28)
-            + (title_overlap * 0.08)
-            + (min(question_sentence / 20.0, 1.0) * 0.10)
-        )
+        if is_doc_discovery:
+            score = (
+                (vector_score * 0.22)
+                + (bm25_score * 0.22)
+                + (overlap * 0.22)
+                + (title_overlap * 0.22)
+                + (min(question_sentence / 20.0, 1.0) * 0.10)
+            )
+        else:
+            score = (
+                (vector_score * 0.30)
+                + (bm25_score * 0.20)
+                + (overlap * 0.28)
+                + (title_overlap * 0.08)
+                + (min(question_sentence / 20.0, 1.0) * 0.10)
+            )
         if question_numbers and question_numbers & _extract_numbers(text):
             score += 0.08
         if _norm_text(question) in _norm_text(text):
             score += 0.12
         if source_title and any(tok in _norm_text(source_title) for tok in question_tokens):
             score += 0.04
+        if is_doc_discovery and source_title:
+            title_tokens = set(_tokenize_for_search(source_title))
+            if question_tokens & title_tokens:
+                score += 0.08
         adjustment, ranking_notes = _chunk_ranking_adjustments(item, intents, question)
         score += adjustment
         item["rerank_score"] = round(_clamp01(score), 4)
@@ -835,6 +881,42 @@ def _build_context_payload(merged: list[dict]) -> tuple[str, dict[str, int], dic
     return "\n\n".join(context_chunks), source_index, seen_sources
 def _fallback_answer() -> str:
     return "I don't have enough information in the available documents to answer that."
+def _build_document_discovery_answer(seen_sources: dict[str, dict]) -> str:
+    if not seen_sources:
+        return _fallback_answer()
+    lines: list[str] = []
+    ordered = sorted(
+        seen_sources.values(),
+        key=lambda row: float(row.get("rerank_score", row.get("score", 0.0)) or 0.0),
+        reverse=True,
+    )
+    for info in ordered[:MAX_CONTEXT_SOURCES]:
+        title = (
+            info.get("source_title")
+            or info.get("source_name")
+            or info.get("name")
+            or "Untitled source"
+        )
+        citation = int(info.get("citation_num") or len(lines) + 1)
+        evidence = (
+            info.get("evidence_context")
+            or info.get("evidence_anchor")
+            or info.get("evidence_text")
+            or info.get("effective_context")
+            or info.get("snippet")
+            or info.get("chunk_text")
+            or ""
+        )
+        sentence = _split_sentences(evidence)
+        support = sentence[0] if sentence else _norm_text(evidence)[:220]
+        support = re.sub(r"\s+", " ", support).strip()
+        if len(support) > 260:
+            support = support[:257].rstrip() + "..."
+        if support:
+            lines.append(f"{title} [{citation}]: {support}")
+        else:
+            lines.append(f"{title} [{citation}]")
+    return "\n".join(lines) if lines else _fallback_answer()
 def _safe_load_json_list(path: Path) -> list:
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -1344,6 +1426,7 @@ async def build_answer(
     source_index: dict = None,
     revision_notes: str | None = None,
     draft_answer: str | None = None,
+    document_discovery: bool = False,
 ) -> str:
     hist_txt = "\n".join([f"Q: {h['question']}\nA: {h['answer']}" for h in history[-3:]])
     source_legend = ""
@@ -1369,6 +1452,7 @@ async def build_answer(
         f"Use the Source index below to match source filenames to numbers. "
         f"Do NOT list sources at the end — only use inline [N] markers.\n"
         f"7. DO NOT include 'Reference:' or '[Reference: ...]' sections.\n\n"
+        f"{('Discovery mode: The user is asking which policy, procedure, or document discusses a topic. Answer with the document title(s), a short reason from the provided evidence, and inline citation numbers only. Do not use phrases like Source 1 or Source 2 in the answer.\\n\\n') if document_discovery else ''}"
         f"{source_legend}"
         f"{('Revision notes:\\n' + revision_notes + '\\n\\n') if revision_notes else ''}"
         f"{('Draft answer to revise:\\n' + draft_answer + '\\n\\n') if draft_answer else ''}"
@@ -1637,6 +1721,7 @@ async def query_spark(question: str, user: str = "local_user") -> tuple[dict, di
     wall_start = time.perf_counter()
     timing: dict[str, int] = {}
     fallback_used = False
+    is_doc_discovery = _is_document_discovery_question(question)
     t = time.perf_counter()
     history = await load_history(user, limit=20)
     timing["history_load_ms"] = _ms(t)
@@ -1666,7 +1751,7 @@ async def query_spark(question: str, user: str = "local_user") -> tuple[dict, di
     timing["retrieval_ms"] = _ms(t)
     t = time.perf_counter()
     quality_vector = vector_chunks
-    quality_bm25 = [b for b in fts_chunks if float(b.get("score", 0.0) or 0.0) >= MIN_BM25_SCORE]
+    quality_bm25 = fts_chunks[:TOP_K]
     merged = _reciprocal_rank_fusion(quality_vector, quality_bm25)
     reranked_chunks = _rerank_retrieval_chunks(search_query, quality_vector, quality_bm25)
     if not reranked_chunks:
@@ -1676,6 +1761,7 @@ async def query_spark(question: str, user: str = "local_user") -> tuple[dict, di
     context, source_index, seen_sources = _build_context_payload(reranked_chunks)
     print(
         "[Spark Query Counts] "
+        f"doc_discovery={is_doc_discovery} "
         f"vector_chunks={len(vector_chunks)} "
         f"bm25_chunks={len(fts_chunks)} "
         f"quality_vector={len(quality_vector)} "
@@ -1692,11 +1778,13 @@ async def query_spark(question: str, user: str = "local_user") -> tuple[dict, di
         topic_terms = _question_topic_terms(question)
         topic_ok, topic_debug = _context_covers_topic(topic_terms, retrieved_chunks)
         topic_guard = {"applied": bool(topic_terms), "passed": bool(topic_ok), **topic_debug}
-        if topic_terms and not topic_ok:
+        if topic_terms and not topic_ok and not is_doc_discovery:
             answer = _fallback_answer()
             fallback_used = True
+        elif is_doc_discovery:
+            answer = _build_document_discovery_answer(seen_sources)
         else:
-            answer = await build_answer(question, context, history, source_index=source_index)
+            answer = await build_answer(question, context, history, source_index=source_index, document_discovery=is_doc_discovery)
     else:
         answer = _fallback_answer()
         fallback_used = True
@@ -1740,7 +1828,7 @@ async def query_spark(question: str, user: str = "local_user") -> tuple[dict, di
         )
         for info in seen_sources.values()
     ).strip()
-    if combined_evidence_text:
+    if combined_evidence_text and not is_doc_discovery:
         filtered_answer = _filter_answer_to_evidence(answer, combined_evidence_text)
         if filtered_answer:
             answer = filtered_answer
@@ -1803,6 +1891,7 @@ async def query_spark(question: str, user: str = "local_user") -> tuple[dict, di
                 "selected_evidence": selected_evidence_debug,
                 "topic_guard": topic_guard,
                 "fallback_used": fallback_used,
+                "document_discovery": is_doc_discovery,
             },
             "confidence": confidence,
             "confidence_detail": {
