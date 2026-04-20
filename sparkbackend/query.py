@@ -198,6 +198,37 @@ def _detect_question_intents(question: str) -> dict[str, bool]:
             "authorization",
             "access rights",
         ),
+        "procedure_intent": (
+            "how do i",
+            "how can i",
+            "how should i",
+            "what is the process",
+            "what's the process",
+            "what do i do",
+            "where do i",
+            "who do i contact",
+            "how to",
+            "request access",
+            "report",
+            "submit",
+            "contact",
+            "approval",
+            "approve",
+            "escalate",
+            "escalation",
+            "hotline",
+        ),
+        "travel_limit_intent": (
+            "hotel limit",
+            "business travel",
+            "lodging",
+            "reimbursement",
+            "per night",
+            "maximum",
+            "max",
+            "limit",
+            "travel expenses",
+        ),
     }
     return {
         intent: any(term in q_norm for term in keywords)
@@ -226,6 +257,35 @@ def _is_document_discovery_question(question: str) -> bool:
     has_doc_term = bool(re.search(rf"\b{doc_terms}\b", q))
     has_action_term = bool(re.search(rf"\b{action_terms}\b", q))
     return has_doc_term and has_action_term
+def _is_procedural_question(question: str) -> bool:
+    q = _norm_text(question)
+    if not q:
+        return False
+    patterns = (
+        "how do i",
+        "how can i",
+        "how should i",
+        "what is the process",
+        "what's the process",
+        "what do i do",
+        "where do i",
+        "who do i contact",
+        "how to",
+        "request access",
+        "report a concern",
+        "report an ethics concern",
+        "report a compliance concern",
+        "submit a request",
+        "escalate",
+    )
+    return any(pattern in q for pattern in patterns)
+def _is_travel_limit_question(question: str) -> bool:
+    q = _norm_text(question)
+    if not q:
+        return False
+    travel_terms = ("hotel", "lodging", "business travel", "travel expenses", "expense", "reimbursement")
+    limit_terms = ("limit", "maximum", "max", "cap", "per night", "rate", "allowance")
+    return ("hotel limit" in q) or (any(term in q for term in travel_terms) and any(term in q for term in limit_terms))
 def _expand_keyword_query(question: str) -> str:
     q_norm = _norm_text(question)
     extras: list[str] = []
@@ -238,12 +298,38 @@ def _expand_keyword_query(question: str) -> str:
         extras.extend(["preparation", "detection", "analysis", "containment", "eradication", "recovery", "post-incident"])
     if intents.get("access_control_intent"):
         extras.extend(["access control", "authentication", "authorization", "least privilege", "need to know"])
+    if intents.get("procedure_intent"):
+        extras.extend(["process", "procedure", "request", "reporting", "escalation", "approval", "responsibilities", "hotline", "contact", "access"])
+    if _is_travel_limit_question(question):
+        extras.extend(["hotel", "lodging", "reimbursement", "per night", "maximum", "limit", "travel expenses"])
     if not extras:
         return question
     expanded = f"{question} {' '.join(extras)}"
     if len(expanded) > len(question) + 240:
         return f"{question} {' '.join(extras[:6])}"
     return expanded
+def _bm25_fallback_queries(question: str) -> list[str]:
+    q = _norm_text(question)
+    queries: list[str] = []
+    if _is_procedural_question(question) and "access" in q:
+        queries.extend(["access approval", "access rights", "request access", "application access"])
+    if _is_procedural_question(question) and any(term in q for term in ("ethics", "compliance", "concern", "report")):
+        queries.extend([
+            "whistleblower policy",
+            "security violations",
+            "reporting security violations",
+            "code ethics",
+            "chief compliance officer",
+        ])
+    if _is_travel_limit_question(question):
+        queries.extend(["hotel lodging", "hotel rate", "lodging policies", "travel lodging reimbursement"])
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for query in queries:
+        if query not in seen:
+            deduped.append(query)
+            seen.add(query)
+    return deduped
 def _question_topic_terms(question: str) -> set[str]:
     q_norm = _norm_text(question)
     tokens = _tokenize_for_search(question)
@@ -279,6 +365,24 @@ def _topic_term_synonyms() -> dict[str, set[str]]:
         "work": {"employment", "working"},
         "laptop": {"device", "computer", "equipment"},
         "cardholder": {"card holder", "cardholder data"},
+        "access": {"permission", "permissions", "authorization", "provisioning", "approval", "access rights", "need to know"},
+        "permissions": {"access", "authorization", "access rights", "provisioning"},
+        "provisioning": {"access", "authorization", "permissions", "approval"},
+        "authorization": {"access", "permission", "permissions", "approval"},
+        "approval": {"authorization", "permission", "permissions", "approve"},
+        "shared": {"shared drive", "shared folder", "file share", "network drive", "network share"},
+        "drive": {"shared drive", "shared folder", "file share", "network drive", "network share"},
+        "folder": {"shared folder", "file share", "network drive", "shared drive"},
+        "application": {"system", "software", "program", "platform", "app"},
+        "system": {"application", "software", "platform", "app"},
+        "ethics": {"code of conduct", "hotline", "concern", "misconduct", "violation"},
+        "compliance": {"regulatory", "reporting", "hotline", "concern", "violation"},
+        "report": {"notify", "notification", "escalate", "submit", "disclose", "reporting"},
+        "concern": {"issue", "complaint", "misconduct", "violation", "hotline"},
+        "request": {"submit", "ticket", "approval", "provisioning"},
+        "submit": {"request", "report", "notify"},
+        "escalate": {"report", "notify", "escalation"},
+        "hotline": {"ethics", "compliance", "reporting", "concern"},
     }
 def _context_covers_topic(topic_terms: set[str], chunks: list[dict], min_coverage: float = TOPIC_GUARD_MIN_COVERAGE, max_chunks: int = TOPIC_GUARD_MAX_CHUNKS) -> tuple[bool, dict[str, Any]]:
     if not topic_terms:
@@ -315,6 +419,7 @@ def _chunk_noise_terms() -> set[str]:
     }
 def _chunk_ranking_adjustments(item: dict, intents: dict[str, bool], question: str) -> tuple[float, list[str]]:
     chunk_type = str(item.get("chunk_type") or "body")
+    source_title = _norm_text(str(item.get("source_title") or item.get("source_name") or item.get("source") or ""))
     section_title = _norm_text(str(item.get("section_title") or ""))
     parent_section_title = _norm_text(str(item.get("parent_section_title") or ""))
     text = _norm_text(str(item.get("text") or ""))
@@ -368,6 +473,64 @@ def _chunk_ranking_adjustments(item: dict, intents: dict[str, bool], question: s
     if intents.get("access_control_intent") and any(term in section_title or term in parent_section_title or term in text for term in ("access control", "authentication", "authorization", "least privilege", "need to know")):
         score_delta += 0.35
         notes.append("access_control:section_match")
+    haystack = f"{section_title} {parent_section_title} {text}"
+    if intents.get("procedure_intent"):
+        procedure_terms = (
+            "process",
+            "procedure",
+            "request",
+            "reporting",
+            "escalation",
+            "approval",
+            "responsibilities",
+            "hotline",
+            "contact",
+            "access",
+            "submit",
+            "notify",
+        )
+        if chunk_type in {"body", "ocr", "responsibility"} and any(term in haystack for term in procedure_terms):
+            score_delta += 0.42
+            notes.append("procedure:workflow_match")
+        if chunk_type == "responsibility":
+            score_delta += 0.18
+            notes.append("procedure:responsibility_boost")
+        if any(term in section_title or term in parent_section_title for term in procedure_terms):
+            score_delta += 0.28
+            notes.append("procedure:section_match")
+        if any(term in _norm_text(question) for term in ("ethics", "compliance", "concern", "report")):
+            reporting_terms = (
+                "whistleblower",
+                "whistle blower",
+                "code of ethics",
+                "code of business conduct",
+                "security violations",
+                "reporting security violations",
+                "suspected compromises",
+                "suspected disclosure",
+            )
+            if any(term in haystack for term in reporting_terms):
+                score_delta += 0.7
+                notes.append("procedure:reporting_evidence")
+            elif any(term in source_title for term in ("digital delivery", "travel and expense", "sox compliance")):
+                score_delta -= 0.7
+                notes.append("procedure:generic_compliance_penalty")
+    if _is_travel_limit_question(question):
+        travel_terms = (
+            "hotel",
+            "lodging",
+            "reimbursement",
+            "per night",
+            "maximum",
+            "limit",
+            "travel expenses",
+        )
+        if any(term in haystack for term in travel_terms):
+            score_delta += 0.46
+            notes.append("travel_limit:content_match")
+        if any(term in section_title or term in parent_section_title for term in travel_terms):
+            score_delta += 0.24
+            notes.append("travel_limit:section_match")
     sheet_name = _norm_text(str(item.get("sheet_name") or ""))
     range_ref = _norm_text(str(item.get("range_ref") or ""))
     headers = _xlsx_headers(item)
@@ -554,6 +717,16 @@ def retrieve(question: str, department: str = None) -> list[dict]:
     return scored
 def retrieve_bm25(keyword_query: str) -> list[dict]:
     results = search_chunks_fts(_expand_keyword_query(keyword_query), limit=TOP_K)
+    if not results:
+        merged: dict[str, dict] = {}
+        for fallback_query in _bm25_fallback_queries(keyword_query):
+            for item in search_chunks_fts(fallback_query, limit=TOP_K):
+                key = _chunk_identity(item)
+                if key not in merged or float(item.get("score", 0.0) or 0.0) > float(merged[key].get("score", 0.0) or 0.0):
+                    merged[key] = item
+        if merged:
+            results = sorted(merged.values(), key=lambda row: float(row.get("score", 0.0) or 0.0), reverse=True)[:TOP_K]
+            print(f"[Spark Query BM25] fallback_queries={_bm25_fallback_queries(keyword_query)} results={len(results)}")
     return results
 def get_retrieval_preview(question: str, department: str = None, limit: int = 8) -> list[dict[str, Any]]:
     vector_chunks = retrieve(question, department=department)
@@ -910,6 +1083,33 @@ def _build_document_discovery_answer(seen_sources: dict[str, dict]) -> str:
         else:
             lines.append(f"{title} [{citation}]")
     return "\n".join(lines) if lines else _fallback_answer()
+def _build_grounded_evidence_answer(question: str, seen_sources: dict[str, dict]) -> str:
+    if not seen_sources:
+        return _fallback_answer()
+    q_norm = _norm_text(question)
+    travel_limit = _is_travel_limit_question(question)
+    ordered = sorted(
+        seen_sources.values(),
+        key=lambda row: float(row.get("rerank_score", row.get("score", 0.0)) or 0.0),
+        reverse=True,
+    )
+    lines: list[str] = []
+    for info in ordered[:2]:
+        citation = int(info.get("citation_num") or len(lines) + 1)
+        text = info.get("effective_context") or info.get("chunk_text") or info.get("snippet") or ""
+        sentences = [sentence.strip() for sentence in _split_sentences(text) if sentence.strip()]
+        if not sentences:
+            continue
+        best_sentence = max(sentences, key=lambda sentence: _evidence_sentence_score(question, "", sentence))
+        if best_sentence:
+            lines.append(f"{best_sentence} [{citation}]")
+    if not lines:
+        return _fallback_answer()
+    if travel_limit and not re.search(r"(\$|\bdollar\b|\blimit\b|\bmaximum\b|\bper night\b|\brate\b|\bcap\b)", _norm_text(" ".join(lines))):
+        lines.append("I did not find a specific hotel dollar limit in the retrieved travel policy text.")
+    elif ("how do i" in q_norm or "how can i" in q_norm or "what do i do" in q_norm) and len(lines) == 1:
+        lines.append("I did not find a more detailed step-by-step workflow in the retrieved policy text.")
+    return " ".join(lines).strip()
 def _safe_load_json_list(path: Path) -> list:
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -1714,9 +1914,13 @@ async def query_spark(question: str, user: str = "local_user") -> tuple[dict, di
     wall_start = time.perf_counter()
     timing: dict[str, int] = {}
     fallback_used = False
+    grounded_evidence_fallback_used = False
     is_doc_discovery = _is_document_discovery_question(question)
+    is_procedural = _is_procedural_question(question)
     if is_doc_discovery:
         print(f"[Spark Query] Document discovery mode triggered for question='{question}'")
+    if is_procedural:
+        print(f"[Spark Query] Procedural mode triggered for question='{question}'")
     t = time.perf_counter()
     history = await load_history(user, limit=20)
     timing["history_load_ms"] = _ms(t)
@@ -1783,8 +1987,16 @@ async def query_spark(question: str, user: str = "local_user") -> tuple[dict, di
         topic_ok, topic_debug = _context_covers_topic(topic_terms, retrieved_chunks)
         topic_guard = {"applied": bool(topic_terms), "passed": bool(topic_ok), **topic_debug}
         if topic_terms and not topic_ok and not is_doc_discovery:
-            answer = _fallback_answer()
-            fallback_used = True
+            if is_procedural:
+                print(
+                    "[Spark Query] Topic guard relaxed for procedural question "
+                    f"coverage={topic_guard.get('coverage')} "
+                    f"missing={topic_guard.get('missing_terms')}"
+                )
+                answer = await build_answer(question, context, history, source_index=source_index, document_discovery=is_doc_discovery)
+            else:
+                answer = _fallback_answer()
+                fallback_used = True
         elif is_doc_discovery:
             if topic_terms and not topic_ok:
                 print(
@@ -1803,6 +2015,10 @@ async def query_spark(question: str, user: str = "local_user") -> tuple[dict, di
         rescue_info = _rescue_answer_from_context(question, retrieved_chunks, answer=answer)
         if rescue_info and not _is_malformed_answer(rescue_info.get("answer", "")):
             answer = rescue_info["answer"]
+        elif seen_sources and (is_procedural or _is_travel_limit_question(question) or topic_guard.get("passed", True)):
+            answer = _build_grounded_evidence_answer(question, seen_sources)
+            grounded_evidence_fallback_used = True
+            print("[Spark Query] Grounded evidence fallback used for retrieved context")
         else:
             answer = _fallback_answer()
             fallback_used = True
@@ -1838,7 +2054,7 @@ async def query_spark(question: str, user: str = "local_user") -> tuple[dict, di
         )
         for info in seen_sources.values()
     ).strip()
-    if combined_evidence_text and not is_doc_discovery:
+    if combined_evidence_text and not is_doc_discovery and not grounded_evidence_fallback_used:
         filtered_answer = _filter_answer_to_evidence(answer, combined_evidence_text)
         if filtered_answer:
             answer = filtered_answer
@@ -1876,7 +2092,7 @@ async def query_spark(question: str, user: str = "local_user") -> tuple[dict, di
         )
     top_v = max((float(item.get("score", 0.0) or 0.0) for item in quality_vector), default=0.0)
     top_b_raw = max((float(item.get("score", 0.0) or 0.0) for item in quality_bm25), default=0.0)
-    top_b = min(top_b_raw / max(MIN_BM25_SCORE * 2.0, 1.0), 1.0)
+    top_b = _clamp01(top_b_raw)
     vector_confidence = min(100, max(0, int(((top_v - MIN_VECTOR_SCORE) / 0.50) * 100))) if top_v > MIN_VECTOR_SCORE else 0
     bm25_confidence = min(100, max(0, int(top_b * 100)))
     rerank_confidence = min(100, max(0, int((float(retrieved_chunks[0].get("rerank_score", 0.0) or 0.0) * 100)))) if retrieved_chunks else 0
@@ -1901,7 +2117,9 @@ async def query_spark(question: str, user: str = "local_user") -> tuple[dict, di
                 "selected_evidence": selected_evidence_debug,
                 "topic_guard": topic_guard,
                 "fallback_used": fallback_used,
+                "grounded_evidence_fallback_used": grounded_evidence_fallback_used,
                 "document_discovery": is_doc_discovery,
+                "procedural_question": is_procedural,
             },
             "confidence": confidence,
             "confidence_detail": {
