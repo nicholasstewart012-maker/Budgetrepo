@@ -218,6 +218,37 @@ def _detect_question_intents(question: str) -> dict[str, bool]:
             "escalation",
             "hotline",
         ),
+        "reporting_intent": (
+            "report",
+            "hotline",
+            "ethics",
+            "compliance",
+            "misconduct",
+            "whistleblower",
+            "whistle blower",
+            "anonymous",
+            "concern",
+        ),
+        "access_request_intent": (
+            "request access",
+            "get access",
+            "system access",
+            "application access",
+            "shared drive",
+            "network share",
+            "shared folder",
+            "file share",
+        ),
+        "access_removal_intent": (
+            "remove access",
+            "access removed",
+            "revoke access",
+            "termination",
+            "offboarding",
+            "employee leaves",
+            "leaves the company",
+            "separated employee",
+        ),
         "travel_limit_intent": (
             "hotel limit",
             "business travel",
@@ -275,6 +306,13 @@ def _is_procedural_question(question: str) -> bool:
         "report a concern",
         "report an ethics concern",
         "report a compliance concern",
+        "report misconduct",
+        "ethics concern",
+        "compliance concern",
+        "hotline",
+        "whistleblower",
+        "whistle blower",
+        "anonymous",
         "submit a request",
         "escalate",
     )
@@ -300,6 +338,12 @@ def _expand_keyword_query(question: str) -> str:
         extras.extend(["access control", "authentication", "authorization", "least privilege", "need to know"])
     if intents.get("procedure_intent"):
         extras.extend(["process", "procedure", "request", "reporting", "escalation", "approval", "responsibilities", "hotline", "contact", "access"])
+    if intents.get("reporting_intent"):
+        extras.extend(["hotline", "whistleblower", "anonymous", "contact", "notify", "email", "phone", "reporting"])
+    if intents.get("access_request_intent"):
+        extras.extend(["access approval", "access rights", "authorization", "manager", "human resources", "information systems administrator"])
+    if intents.get("access_removal_intent"):
+        extras.extend(["terminate access", "remove access", "separated employee", "termination procedures", "human resources"])
     if _is_travel_limit_question(question):
         extras.extend(["hotel", "lodging", "reimbursement", "per night", "maximum", "limit", "travel expenses"])
     if not extras:
@@ -311,15 +355,20 @@ def _expand_keyword_query(question: str) -> str:
 def _bm25_fallback_queries(question: str) -> list[str]:
     q = _norm_text(question)
     queries: list[str] = []
-    if _is_procedural_question(question) and "access" in q:
+    intents = _detect_question_intents(question)
+    if intents.get("access_request_intent"):
         queries.extend(["access approval", "access rights", "request access", "application access"])
-    if _is_procedural_question(question) and any(term in q for term in ("ethics", "compliance", "concern", "report")):
+    if intents.get("access_removal_intent"):
+        queries.extend(["remove access", "termination procedures", "separated employee access", "access must immediately cease"])
+    if intents.get("reporting_intent"):
         queries.extend([
             "whistleblower policy",
+            "whistleblower anonymous",
             "security violations",
             "reporting security violations",
             "code ethics",
             "chief compliance officer",
+            "email phone report",
         ])
     if _is_travel_limit_question(question):
         queries.extend(["hotel lodging", "hotel rate", "lodging policies", "travel lodging reimbursement"])
@@ -515,6 +564,59 @@ def _chunk_ranking_adjustments(item: dict, intents: dict[str, bool], question: s
             elif any(term in source_title for term in ("digital delivery", "travel and expense", "sox compliance")):
                 score_delta -= 0.7
                 notes.append("procedure:generic_compliance_penalty")
+    if intents.get("reporting_intent"):
+        question_norm = _norm_text(question)
+        reporting_channel_terms = (
+            "hotline",
+            "report",
+            "reporting",
+            "whistleblower",
+            "whistle blower",
+            "anonymous",
+            "contact",
+            "notify",
+            "incident response",
+            "email",
+            "e-mail",
+            "phone",
+            "voice mail",
+            "voicemail",
+        )
+        if any(term in haystack for term in reporting_channel_terms):
+            score_delta += 0.35
+            notes.append("reporting:channel_match")
+        if any(term in question_norm for term in ("hotline", "ethics", "anonymous", "misconduct")):
+            if any(term in haystack for term in ("whistleblower", "whistle blower", "anonymous", "voice mail", "voicemail")):
+                score_delta += 1.2
+                notes.append("reporting:whistleblower_match")
+            if "incident response" in source_title and not any(term in haystack for term in ("whistleblower", "anonymous")):
+                score_delta -= 0.45
+                notes.append("reporting:incident_response_penalty")
+        if ("code of ethics" in haystack or "ethical conduct" in haystack) and not any(term in haystack for term in ("report", "hotline", "whistleblower", "anonymous", "contact")):
+            score_delta -= 0.25
+            notes.append("reporting:ethics_fluff_penalty")
+        if any(term in source_title for term in ("accounts payable", "fixed assets", "travel and expense", "pci policy")):
+            score_delta -= 0.25
+            notes.append("reporting:domain_penalty")
+    if intents.get("access_request_intent"):
+        access_terms = ("access approval", "access rights", "authorization", "request", "manager", "human resources", "information systems administrator")
+        if any(term in haystack for term in access_terms):
+            score_delta += 0.3
+            notes.append("access_request:evidence_match")
+        if any(term in haystack for term in ("access approval", "user access program", "information systems administrator", "access rights administration")):
+            score_delta += 0.8
+            notes.append("access_request:approval_process_match")
+        if any(term in source_title for term in ("accounts payable", "pci policy", "fixed assets", "travel and expense", "technology change")):
+            score_delta -= 0.35
+            notes.append("access_request:domain_penalty")
+    if intents.get("access_removal_intent"):
+        removal_terms = ("termination", "termination procedures", "separated employee", "immediately cease", "remove access", "access changes")
+        if any(term in haystack for term in removal_terms):
+            score_delta += 0.35
+            notes.append("access_removal:evidence_match")
+        if any(term in source_title for term in ("accounts payable", "pci policy", "fixed assets", "travel and expense")):
+            score_delta -= 0.35
+            notes.append("access_removal:domain_penalty")
     if _is_travel_limit_question(question):
         travel_terms = (
             "hotel",
@@ -896,6 +998,7 @@ def _rerank_retrieval_chunks(question: str, vector_results: list[dict], bm25_res
                 score += 0.08
         adjustment, ranking_notes = _chunk_ranking_adjustments(item, intents, question)
         score += adjustment
+        item["rerank_score_raw"] = round(score, 4)
         item["rerank_score"] = round(_clamp01(score), 4)
         item["retrieval_score"] = round(max(vector_score, bm25_score), 4)
         item["bm25_score_normalized"] = round(bm25_score, 4)
@@ -903,6 +1006,7 @@ def _rerank_retrieval_chunks(question: str, vector_results: list[dict], bm25_res
         item["selection_reason"] = ", ".join(ranking_notes[:4]) if ranking_notes else "baseline"
         ranked.append(item)
     ranked.sort(key=lambda item: (
+        item.get("rerank_score_raw", item.get("rerank_score", 0.0)),
         item.get("rerank_score", 0.0),
         item.get("retrieval_score", 0.0),
         item.get("vector_score", 0.0),
@@ -1345,6 +1449,24 @@ def _evidence_sentence_score(question: str, answer: str, sentence: str) -> float
         score += 3.0
     if re.search(r"\b(rate|limit|maximum|eligible)\b", s_norm):
         score += 1.5
+    if any(term in s_norm for term in (
+        "must report",
+        "should report",
+        "contact",
+        "submit",
+        "request",
+        "approval",
+        "notify",
+        "email",
+        "e-mail",
+        "phone",
+        "voice mail",
+        "voicemail",
+        "whistleblower",
+        "hotline",
+        "anonymous",
+    )):
+        score += 0.35
     question_year_refs = q_nums or {int(n) for n in re.findall(r"\b(\d+)\s*years?\b", q_norm)}
     for start, end in _extract_year_ranges(sentence):
         for q_num in question_year_refs:
@@ -1915,6 +2037,8 @@ async def query_spark(question: str, user: str = "local_user") -> tuple[dict, di
     timing: dict[str, int] = {}
     fallback_used = False
     grounded_evidence_fallback_used = False
+    question_intents = _detect_question_intents(question)
+    is_reporting_intent = bool(question_intents.get("reporting_intent"))
     is_doc_discovery = _is_document_discovery_question(question)
     is_procedural = _is_procedural_question(question)
     if is_doc_discovery:
@@ -2022,6 +2146,16 @@ async def query_spark(question: str, user: str = "local_user") -> tuple[dict, di
         else:
             answer = _fallback_answer()
             fallback_used = True
+    if is_reporting_intent and seen_sources and not _is_fallback_answer(answer):
+        answer_norm = _norm_text(answer)
+        channel_terms = ("contact", "email", "e-mail", "phone", "report", "hotline", "whistleblower", "anonymous", "notify")
+        requires_reporting_channel = any(term in _norm_text(question) for term in ("hotline", "ethics", "anonymous", "misconduct"))
+        has_reporting_channel = any(term in answer_norm for term in channel_terms)
+        has_specific_reporting_channel = any(term in answer_norm for term in ("hotline", "whistleblower", "anonymous", "email", "e-mail", "phone", "voice mail", "voicemail"))
+        if not has_reporting_channel or (requires_reporting_channel and not has_specific_reporting_channel):
+            answer = _build_grounded_evidence_answer(question, seen_sources)
+            grounded_evidence_fallback_used = True
+            print("[Spark Query] Reporting answer guard forced evidence sentence")
     if _is_fallback_answer(answer) or _is_malformed_answer(answer):
         print("[Spark Query] Final answer is fallback/malformed -> clearing sources")
         fallback_used = True
@@ -2054,10 +2188,20 @@ async def query_spark(question: str, user: str = "local_user") -> tuple[dict, di
         )
         for info in seen_sources.values()
     ).strip()
+    hotline_clarification = ""
+    if is_reporting_intent and "hotline" in _norm_text(question) and "hotline" not in _norm_text(answer):
+        combined_reporting_text = _norm_text(
+            combined_evidence_text
+            or " ".join(str(info.get("chunk_text") or info.get("effective_context") or "") for info in seen_sources.values())
+        )
+        if "hotline" not in combined_reporting_text:
+            hotline_clarification = "I did not find a separate ethics hotline in the retrieved policy text."
     if combined_evidence_text and not is_doc_discovery and not grounded_evidence_fallback_used:
         filtered_answer = _filter_answer_to_evidence(answer, combined_evidence_text)
         if filtered_answer:
             answer = filtered_answer
+    if hotline_clarification and hotline_clarification not in answer:
+        answer = f"{hotline_clarification} {answer}".strip()
     timing["total_ms"] = _ms(wall_start)
     selected_evidence_debug = []
     for info in sorted(seen_sources.values(), key=lambda row: float(row.get("rerank_score", row.get("score", 0.0)) or 0.0), reverse=True):
@@ -2120,6 +2264,9 @@ async def query_spark(question: str, user: str = "local_user") -> tuple[dict, di
                 "grounded_evidence_fallback_used": grounded_evidence_fallback_used,
                 "document_discovery": is_doc_discovery,
                 "procedural_question": is_procedural,
+                "reporting_intent": is_reporting_intent,
+                "access_request_intent": bool(question_intents.get("access_request_intent")),
+                "access_removal_intent": bool(question_intents.get("access_removal_intent")),
             },
             "confidence": confidence,
             "confidence_detail": {
