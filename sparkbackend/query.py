@@ -606,8 +606,11 @@ def _chunk_ranking_adjustments(item: dict, intents: dict[str, bool], question: s
         if any(term in haystack for term in ("access approval", "user access program", "information systems administrator", "access rights administration")):
             score_delta += 0.8
             notes.append("access_request:approval_process_match")
-        if any(term in source_title for term in ("accounts payable", "pci policy", "fixed assets", "travel and expense", "technology change")):
-            score_delta -= 0.35
+        if any(term in haystack for term in ("bank control update", "general ledger interface", "general ledger solution")) and "general ledger" not in _norm_text(question):
+            score_delta -= 1.0
+            notes.append("access_request:gl_specific_penalty")
+        if any(term in source_title for term in ("accounts payable", "accounting financial reporting", "pci policy", "fixed assets", "travel and expense", "technology change")):
+            score_delta -= 1.2
             notes.append("access_request:domain_penalty")
     if intents.get("access_removal_intent"):
         removal_terms = ("termination", "termination procedures", "separated employee", "immediately cease", "remove access", "access changes")
@@ -615,7 +618,7 @@ def _chunk_ranking_adjustments(item: dict, intents: dict[str, bool], question: s
             score_delta += 0.35
             notes.append("access_removal:evidence_match")
         if any(term in source_title for term in ("accounts payable", "pci policy", "fixed assets", "travel and expense")):
-            score_delta -= 0.35
+            score_delta -= 1.2
             notes.append("access_removal:domain_penalty")
     if _is_travel_limit_question(question):
         travel_terms = (
@@ -1467,6 +1470,17 @@ def _evidence_sentence_score(question: str, answer: str, sentence: str) -> float
         "anonymous",
     )):
         score += 0.35
+    if any(term in q_norm for term in ("hotline", "ethics", "anonymous", "misconduct", "whistleblower", "whistle blower")):
+        if "whistleblower" in s_norm or "whistle blower" in s_norm:
+            score += 10.0
+        if "anonymous" in s_norm:
+            score += 6.0
+        if any(term in s_norm for term in ("report security related incidents", "must report", "should report", "contact", "email", "e-mail", "phone", "voice mail", "voicemail")):
+            score += 4.0
+        if "technology group maintains an incident response playbook" in s_norm:
+            score -= 4.0
+        if "ethical conduct" in s_norm and not any(term in s_norm for term in ("report", "whistleblower", "anonymous", "contact")):
+            score -= 3.0
     question_year_refs = q_nums or {int(n) for n in re.findall(r"\b(\d+)\s*years?\b", q_norm)}
     for start, end in _extract_year_ranges(sentence):
         for q_num in question_year_refs:
@@ -2189,13 +2203,16 @@ async def query_spark(question: str, user: str = "local_user") -> tuple[dict, di
         for info in seen_sources.values()
     ).strip()
     hotline_clarification = ""
-    if is_reporting_intent and "hotline" in _norm_text(question) and "hotline" not in _norm_text(answer):
+    if is_reporting_intent and "hotline" in _norm_text(question):
         combined_reporting_text = _norm_text(
             combined_evidence_text
             or " ".join(str(info.get("chunk_text") or info.get("effective_context") or "") for info in seen_sources.values())
         )
         if "hotline" not in combined_reporting_text:
             hotline_clarification = "I did not find a separate ethics hotline in the retrieved policy text."
+            if "hotline" in _norm_text(answer) or "implies" in _norm_text(answer):
+                answer = _build_grounded_evidence_answer(question, seen_sources)
+                grounded_evidence_fallback_used = True
     if combined_evidence_text and not is_doc_discovery and not grounded_evidence_fallback_used:
         filtered_answer = _filter_answer_to_evidence(answer, combined_evidence_text)
         if filtered_answer:
